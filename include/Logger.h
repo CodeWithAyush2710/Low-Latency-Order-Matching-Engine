@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <atomic>
 #include "ThreadCompat.h"
 
 #include <chrono>
@@ -22,9 +23,14 @@ public:
     }
 
     void log(LogLevel level, const std::string& message);
+    
+    void setQuiet(bool quiet) {
+        this->quiet = quiet;
+    }
 
 private:
-    Logger() {}
+    Logger() : quiet(false) {}
+    std::atomic<bool> quiet; // Use atomic for thread safety without mutex complexity here
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
 

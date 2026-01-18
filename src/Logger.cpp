@@ -3,6 +3,7 @@
 #include <iomanip>
 
 void Logger::log(LogLevel level, const std::string& message) {
+    if (quiet) return;
     LockType lock(logMutex);
 
     std::time_t now = std::time(nullptr);

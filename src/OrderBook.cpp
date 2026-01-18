@@ -28,20 +28,50 @@ void OrderBook::addOrder(const Order& order) {
     matchOrders();
 }
 
+void OrderBook::cancelOrder(int orderId) {
+    LockType lock(bookMutex);
+    cancelledOrderIds.insert(orderId);
+    Logger::getInstance().log(LogLevel::INFO, "Requested Cancel: OrderID=" + std::to_string(orderId));
+}
+
 void OrderBook::matchOrders() {
     while (!buyOrders.empty() && !sellOrders.empty()) {
         Order topBuy = buyOrders.top();
+        if (cancelledOrderIds.count(topBuy.id)) {
+            buyOrders.pop();
+            continue;
+        }
+
         Order topSell = sellOrders.top();
+        if (cancelledOrderIds.count(topSell.id)) {
+            sellOrders.pop();
+            continue;
+        }
 
         // Check if overlap exists
         if (topBuy.price >= topSell.price) {
             // Match found
             int matchQty = std::min(topBuy.quantity, topSell.quantity);
             
-            Logger::getInstance().log(LogLevel::INFO, "MATCH EXECUTED: Buy ID " + std::to_string(topBuy.id) + 
-                " and Sell ID " + std::to_string(topSell.id) + 
-                " @ Price " + std::to_string(topSell.price) + 
+            // Determine execution price (Maker/Passive order sets the price)
+            double execPrice = topSell.price;
+            if (topBuy.timestamp < topSell.timestamp) {
+                execPrice = topBuy.price;
+            }
+            
+            // Market Order Safeguard: If Price is arbitrary (Inf/0), use the Limit order's price
+            if (execPrice > 1000000.0 || execPrice < 0.0001) {
+                if (topSell.price < 1000000.0 && topSell.price > 0.0001) execPrice = topSell.price;
+                else if (topBuy.price < 1000000.0 && topBuy.price > 0.0001) execPrice = topBuy.price;
+                else execPrice = 100.0; // Arbitrary fallback if both are Market
+            }
+            
+            Logger::getInstance().log(LogLevel::INFO, "MATCH EXECUTED: Buy #" + std::to_string(topBuy.id) + 
+                " & Sell #" + std::to_string(topSell.id) + 
+                " @ " + std::to_string(execPrice) + 
                 " Qty " + std::to_string(matchQty));
+
+            totalMatches++;
 
             // Pop both from pqs
             buyOrders.pop();
